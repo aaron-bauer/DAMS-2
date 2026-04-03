@@ -20,9 +20,9 @@ class DamsApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,
-        primaryColor: const Color(0xFF8B0000), // Deep Red
-        scaffoldBackgroundColor: const Color(0xFF121212), // Dark Background
-        cardColor: const Color(0xFF1E1E1E), // Card Background
+        primaryColor: const Color(0xFF8B0000),
+        scaffoldBackgroundColor: const Color(0xFF121212),
+        cardColor: const Color(0xFF1E1E1E),
         fontFamily: 'Roboto',
       ),
       home: const MainFlowController(),
@@ -38,7 +38,7 @@ class MainFlowController extends StatefulWidget {
 }
 
 class _MainFlowControllerState extends State<MainFlowController> {
-  int _currentStep = 0; // 0: Splash, 1: Role Selection, 2: How it Works, 3: Dashboard
+  int _currentStep = 0;
   String? _userName;
   String? _selectedRole;
 
@@ -185,7 +185,8 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   int _currentIndex = 0;
   final Strategy strategy = Strategy.P2P_CLUSTER;
-  Map<String, Map<String, dynamic>> survivors = {};
+  final MapController _mapController = MapController();
+  Map<String, Map<String, dynamic>> peers = {}; // id -> {name, lat, lng, role, time}
   List<Map<String, dynamic>> chatMessages = [];
   List<String> liveFeedLogs = [];
   Set<String> connectedEndPoints = {};
@@ -197,9 +198,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     _initMesh();
+    _getCurrentLocation();
     if (widget.role == 'survivor') {
       _locationTimer = Timer.periodic(const Duration(seconds: 15), (timer) => _broadcastLocation());
     }
+  }
+
+  void _getCurrentLocation() async {
+    Position position = await Geolocator.getCurrentPosition();
+    setState(() {
+      _myPos = position;
+      _mapController.move(LatLng(position.latitude, position.longitude), 15);
+    });
   }
 
   void _initMesh() async {
@@ -212,12 +222,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
             setState(() {
               isMeshActive = true;
               connectedEndPoints.add(id);
-              liveFeedLogs.insert(0, "New connection established: $id");
+              liveFeedLogs.insert(0, "New connection: $id");
             });
           }
         },
         onDisconnected: (id) => setState(() {
-          survivors.remove(id);
+          peers.remove(id);
           connectedEndPoints.remove(id);
           liveFeedLogs.insert(0, "Peer disconnected: $id");
         }),
@@ -239,7 +249,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               }
             },
             onDisconnected: (id) => setState(() {
-              survivors.remove(id);
+              peers.remove(id);
               connectedEndPoints.remove(id);
               liveFeedLogs.insert(0, "Disconnected from: $id");
             }),
@@ -255,11 +265,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final data = jsonDecode(String.fromCharCodes(payload.bytes!));
       setState(() {
         if (data['type'] == 'LOC' || data['type'] == 'SOS') {
-          survivors[id] = {'name': data['sender'], 'lat': data['lat'], 'lng': data['lng'], 'time': DateTime.now()};
-          liveFeedLogs.insert(0, "${data['type']} received from ${data['sender']}");
+          peers[id] = {
+            'name': data['sender'],
+            'lat': data['lat'],
+            'lng': data['lng'],
+            'role': data['role'], // Store the peer's role
+            'time': DateTime.now()
+          };
+          liveFeedLogs.insert(0, "${data['type']} from ${data['sender']} (${data['role']})");
         } else if (data['type'] == 'CHAT') {
           chatMessages.add({'sender': data['sender'], 'text': data['text'], 'isMe': false});
-          liveFeedLogs.insert(0, "Message from ${data['sender']}");
         }
       });
     }
@@ -274,14 +289,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   void _broadcastLocation() async {
     _myPos = await Geolocator.getCurrentPosition();
-    final data = jsonEncode({'type': 'LOC', 'sender': widget.userName, 'lat': _myPos!.latitude, 'lng': _myPos!.longitude});
+    final data = jsonEncode({
+      'type': 'LOC',
+      'sender': widget.userName,
+      'role': widget.role, // Broadcast own role
+      'lat': _myPos!.latitude,
+      'lng': _myPos!.longitude
+    });
     _broadcast(data);
     setState(() {});
   }
 
   void _sendSOS() async {
     _myPos = await Geolocator.getCurrentPosition();
-    final data = jsonEncode({'type': 'SOS', 'sender': widget.userName, 'lat': _myPos!.latitude, 'lng': _myPos!.longitude});
+    final data = jsonEncode({
+      'type': 'SOS',
+      'sender': widget.userName,
+      'role': widget.role, // Broadcast own role
+      'lat': _myPos!.latitude,
+      'lng': _myPos!.longitude
+    });
     _broadcast(data);
     setState(() => liveFeedLogs.insert(0, "SOS Transmitted!"));
   }
@@ -291,7 +318,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: const Color(0xFF8B0000),
-        elevation: 4,
         title: Row(
           children: [
             const Icon(Icons.shield, color: Colors.white),
@@ -299,7 +325,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: const [
-                Text("D.A.M.S.", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                Text("D.A.M.S.", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 Text("DISASTER AID MANAGEMENT", style: TextStyle(fontSize: 10, color: Colors.white70)),
               ],
             ),
@@ -336,42 +362,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Expanded(child: _buildStatCard("ACTIVE PEERS", "${survivors.length}", Icons.people_outline)),
+              Expanded(child: _buildStatCard("ACTIVE PEERS", "${peers.length}", Icons.people_outline)),
               const SizedBox(width: 16),
               Expanded(child: _buildStatCard("TOTAL LOGS", "${liveFeedLogs.length}", Icons.chat_outlined)),
             ],
           ),
           const SizedBox(height: 24),
-          const Text("LIVE FEED", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey)),
+          const Align(alignment: Alignment.centerLeft, child: Text("LIVE FEED", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey))),
           const SizedBox(height: 8),
           Expanded(
             child: Container(
               width: double.infinity,
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(color: const Color(0xFF1E1E1E), borderRadius: BorderRadius.circular(12)),
-              child: liveFeedLogs.isEmpty
-                  ? const Center(child: Text("No activity detected...", style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic)))
-                  : ListView.builder(
-                      itemCount: liveFeedLogs.length,
-                      itemBuilder: (ctx, i) => Padding(
-                        padding: const EdgeInsets.only(bottom: 8.0),
-                        child: Text(liveFeedLogs[i], style: const TextStyle(color: Colors.white70)),
-                      ),
-                    ),
+              child: ListView.builder(
+                itemCount: liveFeedLogs.length,
+                itemBuilder: (ctx, i) => Text(liveFeedLogs[i], style: const TextStyle(color: Colors.white70, fontSize: 12)),
+              ),
             ),
           ),
           if (widget.role == 'survivor') ...[
             const SizedBox(height: 16),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFE53935),
-                minimumSize: const Size(double.infinity, 60),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE53935), minimumSize: const Size(double.infinity, 60)),
               onPressed: _sendSOS,
               child: const Text("SEND EMERGENCY SOS", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
             ),
@@ -390,13 +406,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         children: [
           Icon(icon, color: Colors.grey, size: 20),
           const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(title, style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)),
-              Text(value, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
-            ],
-          ),
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Text(title, style: const TextStyle(fontSize: 10, color: Colors.grey)),
+            Text(value, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+          ]),
         ],
       ),
     );
@@ -417,10 +430,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: Container(
                   margin: const EdgeInsets.symmetric(vertical: 5),
                   padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: m['isMe'] ? const Color(0xFFE53935) : const Color(0xFF1E1E1E),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  decoration: BoxDecoration(color: m['isMe'] ? const Color(0xFFE53935) : const Color(0xFF1E1E1E), borderRadius: BorderRadius.circular(12)),
                   child: Text(m['text'], style: const TextStyle(color: Colors.white)),
                 ),
               );
@@ -431,29 +441,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              Expanded(
-                child: TextField(
-                  controller: chatCtrl,
-                  decoration: InputDecoration(
-                    hintText: "Type a message...",
-                    filled: true,
-                    fillColor: const Color(0xFF1E1E1E),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              IconButton(
-                icon: const Icon(Icons.send, color: Color(0xFFE53935)),
-                onPressed: () {
-                  if (chatCtrl.text.isNotEmpty) {
-                    final data = jsonEncode({'type': 'CHAT', 'sender': widget.userName, 'text': chatCtrl.text});
-                    _broadcast(data);
-                    setState(() => chatMessages.add({'sender': 'Me', 'text': chatCtrl.text, 'isMe': true}));
-                    chatCtrl.clear();
-                  }
-                },
-              ),
+              Expanded(child: TextField(controller: chatCtrl, decoration: const InputDecoration(hintText: "Type a message..."))),
+              IconButton(icon: const Icon(Icons.send, color: Color(0xFFE53935)), onPressed: () {
+                if (chatCtrl.text.isNotEmpty) {
+                  final data = jsonEncode({'type': 'CHAT', 'sender': widget.userName, 'text': chatCtrl.text});
+                  _broadcast(data);
+                  setState(() => chatMessages.add({'sender': 'Me', 'text': chatCtrl.text, 'isMe': true}));
+                  chatCtrl.clear();
+                }
+              }),
             ],
           ),
         ),
@@ -462,15 +458,50 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildMapView() {
-    return FlutterMap(
-      options: MapOptions(initialCenter: LatLng(0, 0), initialZoom: 2),
+    return Stack(
       children: [
-        TileLayer(urlTemplate: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", subdomains: const ['a', 'b', 'c']),
-        MarkerLayer(
-          markers: survivors.values.map((s) => Marker(
-            point: LatLng(s['lat'], s['lng']),
-            child: const Icon(Icons.location_on, color: Color(0xFFE53935), size: 40),
-          )).toList(),
+        FlutterMap(
+          mapController: _mapController,
+          options: MapOptions(initialCenter: LatLng(0, 0), initialZoom: 13),
+          children: [
+            TileLayer(
+              urlTemplate: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+              subdomains: const ['a', 'b', 'c', 'd'],
+            ),
+            MarkerLayer(
+              markers: [
+                // Your location marker
+                if (_myPos != null)
+                  Marker(
+                    point: LatLng(_myPos!.latitude, _myPos!.longitude),
+                    child: Icon(
+                      Icons.my_location, 
+                      color: widget.role == 'rescue' ? Colors.blue : const Color(0xFFE53935), 
+                      size: 30
+                    ),
+                  ),
+                // Peer markers
+                ...peers.values.map((p) => Marker(
+                  point: LatLng(p['lat'], p['lng']),
+                  child: Icon(
+                    Icons.location_on, 
+                    // Blue for Rescue Team, Red for Survivors
+                    color: p['role'] == 'rescue' ? Colors.blue : const Color(0xFFE53935), 
+                    size: 40
+                  ),
+                )).toList(),
+              ],
+            ),
+          ],
+        ),
+        Positioned(
+          bottom: 20,
+          right: 20,
+          child: FloatingActionButton(
+            backgroundColor: const Color(0xFFE53935),
+            onPressed: _getCurrentLocation,
+            child: const Icon(Icons.gps_fixed, color: Colors.white),
+          ),
         ),
       ],
     );
