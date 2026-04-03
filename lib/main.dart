@@ -7,6 +7,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:async';
+import 'dart:math' as math;
 
 void main() => runApp(const DamsApp());
 
@@ -186,11 +187,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _currentIndex = 0;
   final Strategy strategy = Strategy.P2P_CLUSTER;
   final MapController _mapController = MapController();
-  Map<String, Map<String, dynamic>> peers = {}; // id -> {name, lat, lng, role, time}
+  Map<String, Map<String, dynamic>> peers = {}; 
   List<Map<String, dynamic>> chatMessages = [];
   List<String> liveFeedLogs = [];
   Set<String> connectedEndPoints = {};
   bool isMeshActive = false;
+  bool isDownloadingMap = false;
+  double downloadProgress = 0.0;
   Position? _myPos;
   Timer? _locationTimer;
 
@@ -269,7 +272,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             'name': data['sender'],
             'lat': data['lat'],
             'lng': data['lng'],
-            'role': data['role'], // Store the peer's role
+            'role': data['role'],
+            'type': data['type'],
             'time': DateTime.now()
           };
           liveFeedLogs.insert(0, "${data['type']} from ${data['sender']} (${data['role']})");
@@ -292,7 +296,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final data = jsonEncode({
       'type': 'LOC',
       'sender': widget.userName,
-      'role': widget.role, // Broadcast own role
+      'role': widget.role,
       'lat': _myPos!.latitude,
       'lng': _myPos!.longitude
     });
@@ -305,12 +309,67 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final data = jsonEncode({
       'type': 'SOS',
       'sender': widget.userName,
-      'role': widget.role, // Broadcast own role
+      'role': widget.role,
       'lat': _myPos!.latitude,
       'lng': _myPos!.longitude
     });
     _broadcast(data);
     setState(() => liveFeedLogs.insert(0, "SOS Transmitted!"));
+  }
+
+  // --- NEW: OFFLINE MAP DOWNLOADER ---
+  void _downloadRegion() async {
+    if (_myPos == null) return;
+    setState(() {
+      isDownloadingMap = true;
+      downloadProgress = 0.0;
+    });
+
+    try {
+      // Zoom levels to download (13: City, 14: Town, 15: Roads, 16: Detailed Buildings)
+      List<int> zoomLevels = [13, 14, 15, 16];
+      int totalTiles = 0;
+      int downloadedTiles = 0;
+
+      // Calculate total tiles first
+      for (int z in zoomLevels) {
+        totalTiles += 9; // 3x3 grid around center
+      }
+
+      for (int z in zoomLevels) {
+        // Convert Lat/Lng to Tile X/Y
+        double latRad = _myPos!.latitude * math.pi / 180;
+        int n = math.pow(2, z).toInt();
+        int xtile = ((_myPos!.longitude + 180) / 360 * n).floor();
+        int ytile = ((1 - math.log(math.tan(latRad) + 1 / math.cos(latRad)) / math.pi) / 2 * n).floor();
+
+        // Download a 3x3 grid around the user
+        for (int x = xtile - 1; x <= xtile + 1; x++) {
+          for (int y = ytile - 1; y <= ytile + 1; y++) {
+            String url = "https://a.basemaps.cartocdn.com/dark_all/$z/$x/$y.png";
+            // Pre-cache the image into Flutter's internal image cache
+            await precacheImage(NetworkImage(url), context);
+            
+            downloadedTiles++;
+            setState(() {
+              downloadProgress = downloadedTiles / totalTiles;
+            });
+          }
+        }
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Region Downloaded Successfully!"), backgroundColor: Colors.green),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Download Failed: $e"), backgroundColor: Colors.red),
+      );
+    } finally {
+      setState(() {
+        isDownloadingMap = false;
+      });
+    }
   }
 
   @override
@@ -458,6 +517,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildMapView() {
+    int activeSosCount = peers.values.where((p) => p['type'] == 'SOS').length;
+
     return Stack(
       children: [
         FlutterMap(
@@ -470,7 +531,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             MarkerLayer(
               markers: [
-                // Your location marker
                 if (_myPos != null)
                   Marker(
                     point: LatLng(_myPos!.latitude, _myPos!.longitude),
@@ -480,12 +540,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       size: 30
                     ),
                   ),
-                // Peer markers
                 ...peers.values.map((p) => Marker(
                   point: LatLng(p['lat'], p['lng']),
                   child: Icon(
-                    Icons.location_on, 
-                    // Blue for Rescue Team, Red for Survivors
+                    p['type'] == 'SOS' ? Icons.warning : Icons.location_on, 
                     color: p['role'] == 'rescue' ? Colors.blue : const Color(0xFFE53935), 
                     size: 40
                   ),
@@ -494,13 +552,80 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ],
         ),
+        // Top Right Navigation Button
+        Positioned(
+          top: 20,
+          right: 20,
+          child: Column(
+            children: [
+              GestureDetector(
+                onTap: _getCurrentLocation,
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 8)],
+                  ),
+                  child: const Icon(Icons.near_me, color: Colors.black, size: 28),
+                ),
+              ),
+              const SizedBox(height: 10),
+              // NEW: DOWNLOAD BUTTON
+              GestureDetector(
+                onTap: isDownloadingMap ? null : _downloadRegion,
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isDownloadingMap ? Colors.grey : const Color(0xFFE53935),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 8)],
+                  ),
+                  child: isDownloadingMap 
+                    ? const SizedBox(width: 28, height: 28, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Icon(Icons.download_for_offline, color: Colors.white, size: 28),
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Bottom SOS Status Bar
         Positioned(
           bottom: 20,
+          left: 20,
           right: 20,
-          child: FloatingActionButton(
-            backgroundColor: const Color(0xFFE53935),
-            onPressed: _getCurrentLocation,
-            child: const Icon(Icons.gps_fixed, color: Colors.white),
+          child: Column(
+            children: [
+              if (isDownloadingMap)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: LinearProgressIndicator(value: downloadProgress, backgroundColor: Colors.white24, color: const Color(0xFFE53935)),
+                ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.9),
+                  borderRadius: BorderRadius.circular(15),
+                  border: Border.all(color: Colors.white.withOpacity(0.1)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      "$activeSosCount ACTIVE SOS SIGNALS",
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                    GestureDetector(
+                      onTap: () => setState(() => peers.clear()),
+                      child: const Text(
+                        "CLEAR MAP",
+                        style: TextStyle(color: Color(0xFFE53935), fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ],
