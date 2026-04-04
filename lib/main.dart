@@ -44,11 +44,11 @@ class _MainFlowControllerState extends State<MainFlowController> {
   String? _selectedRole;
 
   void _nextStep() => setState(() => _currentStep++);
-  void _goToStep(int step) => setState(() => _currentStep = step);
 
   @override
   void initState() {
     super.initState();
+    // Splash screen timer
     Future.delayed(const Duration(seconds: 3), () {
       if (_currentStep == 0) _nextStep();
     });
@@ -74,8 +74,8 @@ class _MainFlowControllerState extends State<MainFlowController> {
           children: [
             const Icon(Icons.sensors, size: 80, color: Color(0xFFE53935)),
             const SizedBox(height: 30),
-            const Text("D.A.M.S", style: TextStyle(fontSize: 42, fontWeight: FontWeight.bold, color: Colors.white)),
-            const Text("Offline Emergency Coordination", style: TextStyle(fontSize: 16, color: Colors.white70)),
+            const Text("D.A.M.S", style: TextStyle(fontSize: 42, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 4)),
+            const Text("Offline Emergency Coordination", style: TextStyle(fontSize: 14, color: Colors.white70, letterSpacing: 1.2)),
           ],
         ),
       ),
@@ -91,36 +91,46 @@ class _MainFlowControllerState extends State<MainFlowController> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("Welcome to D.A.M.S", style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
-              const Text("Select your role to continue", style: TextStyle(color: Colors.grey)),
+              const SizedBox(height: 20),
+              const Text("Welcome to D.A.M.S", style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold)),
+              const Text("Identify yourself to join the local mesh", style: TextStyle(color: Colors.grey, fontSize: 16)),
               const SizedBox(height: 40),
               TextField(
                 controller: nameCtrl,
+                style: const TextStyle(color: Colors.white),
                 decoration: InputDecoration(
-                  hintText: "Enter your name",
+                  hintText: "Enter your name or callsign",
+                  hintStyle: const TextStyle(color: Colors.grey),
                   filled: true,
                   fillColor: const Color(0xFF1E1E1E),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  prefixIcon: const Icon(Icons.person_outline, color: Colors.grey),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: const BorderSide(color: Color(0xFF8B0000))),
                 ),
               ),
               const SizedBox(height: 30),
-              _roleCard("Rescue Team", "rescue", Icons.shield_outlined),
+              _roleCard("Rescue Team", "rescue", Icons.shield_outlined, "I am here to provide aid"),
               const SizedBox(height: 15),
-              _roleCard("Survivor", "survivor", Icons.location_on_outlined),
+              _roleCard("Survivor", "survivor", Icons.location_on_outlined, "I need assistance or info"),
               const SizedBox(height: 40),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF8B0000),
-                  minimumSize: const Size(double.infinity, 56),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  minimumSize: const Size(double.infinity, 60),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                  elevation: 8,
                 ),
                 onPressed: () {
                   if (nameCtrl.text.isNotEmpty && _selectedRole != null) {
                     _userName = nameCtrl.text;
                     _nextStep();
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("Please enter a name and select a role")),
+                    );
                   }
                 },
-                child: const Text("Start Network →", style: TextStyle(color: Colors.white)),
+                child: const Text("INITIALIZE NETWORK →", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
               ),
             ],
           ),
@@ -129,22 +139,37 @@ class _MainFlowControllerState extends State<MainFlowController> {
     );
   }
 
-  Widget _roleCard(String title, String role, IconData icon) {
+  Widget _roleCard(String title, String role, IconData icon, String subtitle) {
     bool isSel = _selectedRole == role;
     return GestureDetector(
       onTap: () => setState(() => _selectedRole = role),
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: isSel ? const Color(0xFFE53935) : Colors.grey.shade800),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: isSel ? const Color(0xFFE53935) : Colors.grey.shade800, width: 2),
           color: isSel ? const Color(0xFFE53935).withOpacity(0.1) : const Color(0xFF1E1E1E),
+          boxShadow: isSel ? [BoxShadow(color: const Color(0xFFE53935).withOpacity(0.2), blurRadius: 10)] : [],
         ),
         child: Row(
           children: [
-            Icon(icon, color: isSel ? const Color(0xFFE53935) : Colors.white),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: isSel ? const Color(0xFFE53935) : Colors.black26, borderRadius: BorderRadius.circular(12)),
+              child: Icon(icon, color: Colors.white),
+            ),
             const SizedBox(width: 20),
-            Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                  Text(subtitle, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                ],
+              ),
+            ),
+            if (isSel) const Icon(Icons.check_circle, color: Color(0xFFE53935)),
           ],
         ),
       ),
@@ -154,21 +179,42 @@ class _MainFlowControllerState extends State<MainFlowController> {
   Widget _buildHowItWorks() {
     return Scaffold(
       body: Padding(
-        padding: const EdgeInsets.all(30),
+        padding: const EdgeInsets.all(40),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text("How It Works", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+            const Icon(Icons.hub_outlined, size: 100, color: Color(0xFF8B0000)),
+            const SizedBox(height: 30),
+            const Text("Mesh Network Protocol", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
             const SizedBox(height: 40),
-            const Text("1. Rescue Team creates hotspot\n2. Survivors connect via Bluetooth/WiFi\n3. Real-time GPS & Chat enabled", textAlign: TextAlign.center),
-            const SizedBox(height: 50),
+            _stepInfo("1", "Rescue Teams create a local hotspot"),
+            _stepInfo("2", "Survivors connect via Bluetooth/WiFi"),
+            _stepInfo("3", "Real-time GPS & Chat without Internet"),
+            const SizedBox(height: 60),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B0000), minimumSize: const Size(double.infinity, 56)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF8B0000), 
+                minimumSize: const Size(double.infinity, 60),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+              ),
               onPressed: _nextStep,
-              child: const Text("Got It, Let's Start"),
+              child: const Text("ESTABLISH CONNECTION", style: TextStyle(fontWeight: FontWeight.bold)),
             )
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _stepInfo(String num, String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(
+        children: [
+          CircleAvatar(backgroundColor: const Color(0xFF8B0000), radius: 12, child: Text(num, style: const TextStyle(fontSize: 12, color: Colors.white))),
+          const SizedBox(width: 15),
+          Expanded(child: Text(text, style: const TextStyle(fontSize: 15, color: Colors.white70))),
+        ],
       ),
     );
   }
@@ -197,18 +243,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Position? _myPos;
   Timer? _locationTimer;
 
-  // FIXED: Use a single, reliable URL for both download and display
+  // FIXED: Reliable tile URL and User-Agent
   final String mapUrl = "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png";
-  final String downloadUrlBase = "https://a.basemaps.cartocdn.com/dark_all";
+  final String userAgent = "com.dams.emergency.app";
 
   @override
   void initState() {
     super.initState();
     _initMesh();
     _getCurrentLocation();
+    // Periodic location broadcast for survivors
     if (widget.role == 'survivor') {
       _locationTimer = Timer.periodic(const Duration(seconds: 15), (timer) => _broadcastLocation());
     }
+  }
+
+  @override
+  void dispose() {
+    _locationTimer?.cancel();
+    Nearby().stopAdvertising();
+    Nearby().stopDiscovery();
+    super.dispose();
   }
 
   void _getCurrentLocation() async {
@@ -216,8 +271,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
       setState(() {
         _myPos = position;
-        _mapController.move(LatLng(position.latitude, position.longitude), 15);
       });
+      _mapController.move(LatLng(position.latitude, position.longitude), 15);
     } catch (e) {
       debugPrint("Location Error: $e");
     }
@@ -225,6 +280,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   void _initMesh() async {
     await [Permission.location, Permission.bluetooth, Permission.bluetoothScan, Permission.bluetoothConnect, Permission.bluetoothAdvertise, Permission.nearbyWifiDevices].request();
+    
     if (widget.role == 'rescue') {
       await Nearby().startAdvertising(widget.userName, strategy,
         onConnectionInitiated: (id, info) => Nearby().acceptConnection(id, onPayLoadRecieved: _onPayload),
@@ -233,14 +289,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
             setState(() {
               isMeshActive = true;
               connectedEndPoints.add(id);
-              liveFeedLogs.insert(0, "New connection: $id");
+              liveFeedLogs.insert(0, "NEW PEER: $id joined the mesh");
             });
           }
         },
         onDisconnected: (id) => setState(() {
           peers.remove(id);
           connectedEndPoints.remove(id);
-          liveFeedLogs.insert(0, "Peer disconnected: $id");
+          liveFeedLogs.insert(0, "PEER LOST: $id disconnected");
         }),
       );
     } else {
@@ -255,14 +311,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 setState(() {
                   isMeshActive = true;
                   connectedEndPoints.add(id);
-                  liveFeedLogs.insert(0, "Connected to: $id");
+                  liveFeedLogs.insert(0, "CONNECTED: Linked to $id");
                 });
               }
             },
             onDisconnected: (id) => setState(() {
               peers.remove(id);
               connectedEndPoints.remove(id);
-              liveFeedLogs.insert(0, "Disconnected from: $id");
+              liveFeedLogs.insert(0, "DISCONNECTED: Link to $id lost");
             }),
           );
         },
@@ -284,7 +340,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             'type': data['type'],
             'time': DateTime.now()
           };
-          liveFeedLogs.insert(0, "${data['type']} from ${data['sender']} (${data['role']})");
+          liveFeedLogs.insert(0, "${data['type']} SIGNAL: ${data['sender']} (${data['role']})");
         } else if (data['type'] == 'CHAT') {
           chatMessages.add({'sender': data['sender'], 'text': data['text'], 'isMe': false});
         }
@@ -300,32 +356,41 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _broadcastLocation() async {
-    _myPos = await Geolocator.getCurrentPosition();
-    final data = jsonEncode({
-      'type': 'LOC',
-      'sender': widget.userName,
-      'role': widget.role,
-      'lat': _myPos!.latitude,
-      'lng': _myPos!.longitude
-    });
-    _broadcast(data);
-    setState(() {});
+    try {
+      _myPos = await Geolocator.getCurrentPosition();
+      final data = jsonEncode({
+        'type': 'LOC',
+        'sender': widget.userName,
+        'role': widget.role,
+        'lat': _myPos!.latitude,
+        'lng': _myPos!.longitude
+      });
+      _broadcast(data);
+    } catch (e) {
+      debugPrint("Broadcast Error: $e");
+    }
   }
 
   void _sendSOS() async {
-    _myPos = await Geolocator.getCurrentPosition();
-    final data = jsonEncode({
-      'type': 'SOS',
-      'sender': widget.userName,
-      'role': widget.role,
-      'lat': _myPos!.latitude,
-      'lng': _myPos!.longitude
-    });
-    _broadcast(data);
-    setState(() => liveFeedLogs.insert(0, "SOS Transmitted!"));
+    try {
+      _myPos = await Geolocator.getCurrentPosition();
+      final data = jsonEncode({
+        'type': 'SOS',
+        'sender': widget.userName,
+        'role': widget.role,
+        'lat': _myPos!.latitude,
+        'lng': _myPos!.longitude
+      });
+      _broadcast(data);
+      setState(() => liveFeedLogs.insert(0, "CRITICAL: SOS Transmitted!"));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("SOS SIGNAL BROADCASTED"), backgroundColor: Colors.red),
+      );
+    } catch (e) {
+      debugPrint("SOS Error: $e");
+    }
   }
 
-  // FIXED: Download a larger 5x5 grid and use the exact same URL
   void _downloadRegion() async {
     if (_myPos == null) return;
     setState(() {
@@ -334,8 +399,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
 
     try {
-      List<int> zoomLevels = [13, 14, 15, 16];
-      int totalTiles = zoomLevels.length * 25; // 5x5 grid
+      List<int> zoomLevels = [13, 14, 15];
+      int totalTiles = zoomLevels.length * 25; 
       int downloadedTiles = 0;
 
       for (int z in zoomLevels) {
@@ -346,28 +411,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
         for (int x = xtile - 2; x <= xtile + 2; x++) {
           for (int y = ytile - 2; y <= ytile + 2; y++) {
-            String url = "$downloadUrlBase/$z/$x/$y.png";
-            await precacheImage(NetworkImage(url, headers: {'User-Agent': 'com.dams.app'}), context);
-            
+            String url = "https://a.basemaps.cartocdn.com/dark_all/$z/$x/$y.png";
+            await precacheImage(NetworkImage(url, headers: {'User-Agent': userAgent}), context);
             downloadedTiles++;
-            setState(() {
-              downloadProgress = downloadedTiles / totalTiles;
-            });
+            setState(() => downloadProgress = downloadedTiles / totalTiles);
           }
         }
       }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Region Saved to Memory!"), backgroundColor: Colors.green),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Offline Region Cached!"), backgroundColor: Colors.green));
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Download Failed: $e"), backgroundColor: Colors.red),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Cache Failed: $e"), backgroundColor: Colors.red));
     } finally {
-      setState(() {
-        isDownloadingMap = false;
-      });
+      setState(() => isDownloadingMap = false);
     }
   }
 
@@ -376,15 +431,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: const Color(0xFF8B0000),
+        elevation: 10,
         title: Row(
           children: [
-            const Icon(Icons.shield, color: Colors.white),
-            const SizedBox(width: 10),
+            const Icon(Icons.security, color: Colors.white, size: 24),
+            const SizedBox(width: 12),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                Text("D.A.M.S.", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                Text("DISASTER AID MANAGEMENT", style: TextStyle(fontSize: 10, color: Colors.white70)),
+              children: [
+                Text("D.A.M.S. | ${widget.role.toUpperCase()}", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                const Text("MESH NETWORK ACTIVE", style: TextStyle(fontSize: 9, color: Colors.white70, letterSpacing: 2)),
               ],
             ),
           ],
@@ -397,10 +453,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
         backgroundColor: const Color(0xFF121212),
         selectedItemColor: const Color(0xFFE53935),
         unselectedItemColor: Colors.grey,
+        selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10),
+        unselectedLabelStyle: const TextStyle(fontSize: 10),
         type: BottomNavigationBarType.fixed,
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.sensors), label: "COMMS"),
-          BottomNavigationBarItem(icon: Icon(Icons.chat_bubble_outline), label: "CHAT"),
+          BottomNavigationBarItem(icon: Icon(Icons.radar), label: "COMMS"),
+          BottomNavigationBarItem(icon: Icon(Icons.forum_outlined), label: "CHAT"),
           BottomNavigationBarItem(icon: Icon(Icons.map_outlined), label: "MAP"),
         ],
       ),
@@ -418,36 +476,44 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildCommsView() {
     return Padding(
-      padding: const EdgeInsets.all(16.0),
+      padding: const EdgeInsets.all(20.0),
       child: Column(
         children: [
           Row(
             children: [
-              Expanded(child: _buildStatCard("ACTIVE PEERS", "${peers.length}", Icons.people_outline)),
-              const SizedBox(width: 16),
-              Expanded(child: _buildStatCard("TOTAL LOGS", "${liveFeedLogs.length}", Icons.chat_outlined)),
+              Expanded(child: _buildStatCard("PEERS", "${peers.length}", Icons.people_outline)),
+              const SizedBox(width: 15),
+              Expanded(child: _buildStatCard("LOGS", "${liveFeedLogs.length}", Icons.history)),
             ],
           ),
-          const SizedBox(height: 24),
-          const Align(alignment: Alignment.centerLeft, child: Text("LIVE FEED", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey))),
-          const SizedBox(height: 8),
+          const SizedBox(height: 30),
+          const Align(alignment: Alignment.centerLeft, child: Text("LIVE NETWORK FEED", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1.5))),
+          const SizedBox(height: 10),
           Expanded(
             child: Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(color: const Color(0xFF1E1E1E), borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.all(15),
+              decoration: BoxDecoration(color: const Color(0xFF1E1E1E), borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.white10)),
               child: ListView.builder(
                 itemCount: liveFeedLogs.length,
-                itemBuilder: (ctx, i) => Text(liveFeedLogs[i], style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                itemBuilder: (ctx, i) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Text("> ${liveFeedLogs[i]}", style: const TextStyle(color: Colors.greenAccent, fontSize: 11, fontFamily: 'monospace')),
+                ),
               ),
             ),
           ),
           if (widget.role == 'survivor') ...[
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE53935), minimumSize: const Size(double.infinity, 60)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFE53935), 
+                minimumSize: const Size(double.infinity, 70),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                elevation: 10,
+              ),
               onPressed: _sendSOS,
-              child: const Text("SEND EMERGENCY SOS", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+              child: const Text("BROADCAST SOS", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 22, fontStyle: FontStyle.italic)),
             ),
           ],
         ],
@@ -457,17 +523,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildStatCard(String title, String value, IconData icon) {
     return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: const Color(0xFF1E1E1E), borderRadius: BorderRadius.circular(12)),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(color: const Color(0xFF1E1E1E), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white10)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: Colors.grey, size: 20),
-          const SizedBox(height: 12),
-          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            Text(title, style: const TextStyle(fontSize: 10, color: Colors.grey)),
-            Text(value, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-          ]),
+          Icon(icon, color: const Color(0xFFE53935), size: 24),
+          const SizedBox(height: 15),
+          Text(value, style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w900)),
+          Text(title, style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)),
         ],
       ),
     );
@@ -479,35 +543,67 @@ class _DashboardScreenState extends State<DashboardScreen> {
       children: [
         Expanded(
           child: ListView.builder(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(20),
             itemCount: chatMessages.length,
             itemBuilder: (ctx, i) {
               final m = chatMessages[i];
+              bool isMe = m['isMe'] ?? false;
               return Align(
-                alignment: m['isMe'] ? Alignment.centerRight : Alignment.centerLeft,
-                child: Container(
-                  margin: const EdgeInsets.symmetric(vertical: 5),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(color: m['isMe'] ? const Color(0xFFE53935) : const Color(0xFF1E1E1E), borderRadius: BorderRadius.circular(12)),
-                  child: Text(m['text'], style: const TextStyle(color: Colors.white)),
+                alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+                child: Column(
+                  crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                  children: [
+                    Text(m['sender'], style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                    Container(
+                      margin: const EdgeInsets.symmetric(vertical: 5),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: isMe ? const Color(0xFF8B0000) : const Color(0xFF1E1E1E), 
+                        borderRadius: BorderRadius.only(
+                          topLeft: const Radius.circular(15),
+                          topRight: const Radius.circular(15),
+                          bottomLeft: isMe ? const Radius.circular(15) : Radius.zero,
+                          bottomRight: isMe ? Radius.zero : const Radius.circular(15),
+                        )
+                      ),
+                      child: Text(m['text'], style: const TextStyle(color: Colors.white, fontSize: 14)),
+                    ),
+                  ],
                 ),
               );
             },
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.all(16),
+        Container(
+          padding: const EdgeInsets.all(15),
+          color: Colors.black,
           child: Row(
             children: [
-              Expanded(child: TextField(controller: chatCtrl, decoration: const InputDecoration(hintText: "Type a message..."))),
-              IconButton(icon: const Icon(Icons.send, color: Color(0xFFE53935)), onPressed: () {
-                if (chatCtrl.text.isNotEmpty) {
-                  final data = jsonEncode({'type': 'CHAT', 'sender': widget.userName, 'text': chatCtrl.text});
-                  _broadcast(data);
-                  setState(() => chatMessages.add({'sender': 'Me', 'text': chatCtrl.text, 'isMe': true}));
-                  chatCtrl.clear();
-                }
-              }),
+              Expanded(
+                child: TextField(
+                  controller: chatCtrl, 
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    hintText: "Broadcast to mesh...",
+                    hintStyle: const TextStyle(color: Colors.grey),
+                    filled: true,
+                    fillColor: const Color(0xFF1E1E1E),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: BorderSide.none),
+                  )
+                ),
+              ),
+              const SizedBox(width: 10),
+              CircleAvatar(
+                backgroundColor: const Color(0xFFE53935),
+                child: IconButton(icon: const Icon(Icons.send, color: Colors.white, size: 20), onPressed: () {
+                  if (chatCtrl.text.isNotEmpty) {
+                    final data = jsonEncode({'type': 'CHAT', 'sender': widget.userName, 'text': chatCtrl.text});
+                    _broadcast(data);
+                    setState(() => chatMessages.add({'sender': 'Me', 'text': chatCtrl.text, 'isMe': true}));
+                    chatCtrl.clear();
+                  }
+                }),
+              ),
             ],
           ),
         ),
@@ -523,73 +619,63 @@ class _DashboardScreenState extends State<DashboardScreen> {
         FlutterMap(
           mapController: _mapController,
           options: MapOptions(
-            initialCenter: LatLng(0, 0), 
+            initialCenter: _myPos != null ? LatLng(_myPos!.latitude, _myPos!.longitude) : LatLng(0, 0), 
             initialZoom: 13,
-            backgroundColor: const Color(0xFF121212), // FIXED: Dark background while loading
           ),
           children: [
             TileLayer(
-              urlTemplate: mapUrl, // FIXED: Matches the download URL exactly
-              userAgentPackageName: 'com.dams.app',
+              urlTemplate: mapUrl,
+              userAgentPackageName: userAgent,
             ),
             MarkerLayer(
               markers: [
                 if (_myPos != null)
                   Marker(
                     point: LatLng(_myPos!.latitude, _myPos!.longitude),
-                    child: Icon(
-                      Icons.my_location, 
-                      color: widget.role == 'rescue' ? Colors.blue : const Color(0xFFE53935), 
-                      size: 30
+                    width: 40, height: 40,
+                    child: Container(
+                      decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, border: Border.all(color: Colors.blue, width: 3)),
+                      child: const Icon(Icons.person, color: Colors.blue, size: 20),
                     ),
                   ),
                 ...peers.values.map((p) => Marker(
                   point: LatLng(p['lat'], p['lng']),
-                  child: Icon(
-                    p['type'] == 'SOS' ? Icons.warning : Icons.location_on, 
-                    color: p['role'] == 'rescue' ? Colors.blue : const Color(0xFFE53935), 
-                    size: 40
+                  width: 50, height: 50,
+                  child: Column(
+                    children: [
+                      Icon(
+                        p['type'] == 'SOS' ? Icons.warning : Icons.location_on, 
+                        color: p['role'] == 'rescue' ? Colors.blue : const Color(0xFFE53935), 
+                        size: 35
+                      ),
+                      Text(p['name'], style: const TextStyle(fontSize: 8, fontWeight: FontWeight.bold, backgroundColor: Colors.black54)),
+                    ],
                   ),
                 )).toList(),
               ],
             ),
           ],
         ),
+        
+        // MAP CONTROLS
         Positioned(
           top: 20,
           right: 20,
           child: Column(
             children: [
-              GestureDetector(
-                onTap: _getCurrentLocation,
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 8)],
-                  ),
-                  child: const Icon(Icons.near_me, color: Colors.black, size: 28),
-                ),
-              ),
+              _mapActionButton(Icons.my_location, Colors.white, Colors.black, _getCurrentLocation),
               const SizedBox(height: 10),
-              GestureDetector(
-                onTap: isDownloadingMap ? null : _downloadRegion,
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: isDownloadingMap ? Colors.grey : const Color(0xFFE53935),
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 8)],
-                  ),
-                  child: isDownloadingMap 
-                    ? const SizedBox(width: 28, height: 28, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                    : const Icon(Icons.download_for_offline, color: Colors.white, size: 28),
-                ),
+              _mapActionButton(
+                isDownloadingMap ? Icons.hourglass_empty : Icons.download_for_offline, 
+                isDownloadingMap ? Colors.grey : const Color(0xFFE53935), 
+                Colors.white, 
+                isDownloadingMap ? null : _downloadRegion
               ),
             ],
           ),
         ),
+
+        // BOTTOM OVERLAY
         Positioned(
           bottom: 20,
           left: 20,
@@ -599,28 +685,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
               if (isDownloadingMap)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 10),
-                  child: LinearProgressIndicator(value: downloadProgress, backgroundColor: Colors.white24, color: const Color(0xFFE53935)),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: LinearProgressIndicator(value: downloadProgress, backgroundColor: Colors.white24, color: const Color(0xFFE53935), minHeight: 6),
+                  ),
                 ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
                 decoration: BoxDecoration(
                   color: Colors.black.withOpacity(0.9),
-                  borderRadius: BorderRadius.circular(15),
-                  border: Border.all(color: Colors.white.withOpacity(0.1)),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.white10),
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 10)],
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      "$activeSosCount ACTIVE SOS SIGNALS",
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                    Row(
+                      children: [
+                        Container(width: 10, height: 10, decoration: BoxDecoration(color: activeSosCount > 0 ? Colors.red : Colors.green, shape: BoxShape.circle)),
+                        const SizedBox(width: 10),
+                        Text("$activeSosCount ACTIVE SOS SIGNALS", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                      ],
                     ),
                     GestureDetector(
                       onTap: () => setState(() => peers.clear()),
-                      child: const Text(
-                        "CLEAR MAP",
-                        style: TextStyle(color: Color(0xFFE53935), fontWeight: FontWeight.bold, fontSize: 13),
-                      ),
+                      child: const Text("CLEAR", style: TextStyle(color: Color(0xFFE53935), fontWeight: FontWeight.bold, fontSize: 12)),
                     ),
                   ],
                 ),
@@ -629,6 +719,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _mapActionButton(IconData icon, Color bg, Color iconColor, VoidCallback? onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(15),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 8)],
+        ),
+        child: Icon(icon, color: iconColor, size: 24),
+      ),
     );
   }
 }
