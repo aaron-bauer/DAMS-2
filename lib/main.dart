@@ -197,6 +197,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Position? _myPos;
   Timer? _locationTimer;
 
+  // FIXED: Use a single, reliable URL for both download and display
+  final String mapUrl = "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png";
+  final String downloadUrlBase = "https://a.basemaps.cartocdn.com/dark_all";
+
   @override
   void initState() {
     super.initState();
@@ -321,6 +325,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     setState(() => liveFeedLogs.insert(0, "SOS Transmitted!"));
   }
 
+  // FIXED: Download a larger 5x5 grid and use the exact same URL
   void _downloadRegion() async {
     if (_myPos == null) return;
     setState(() {
@@ -330,7 +335,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     try {
       List<int> zoomLevels = [13, 14, 15, 16];
-      int totalTiles = zoomLevels.length * 9;
+      int totalTiles = zoomLevels.length * 25; // 5x5 grid
       int downloadedTiles = 0;
 
       for (int z in zoomLevels) {
@@ -339,10 +344,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         int xtile = ((_myPos!.longitude + 180) / 360 * n).floor();
         int ytile = ((1 - math.log(math.tan(latRad) + 1 / math.cos(latRad)) / math.pi) / 2 * n).floor();
 
-        for (int x = xtile - 1; x <= xtile + 1; x++) {
-          for (int y = ytile - 1; y <= ytile + 1; y++) {
-            // Use a more reliable URL for downloading
-            String url = "https://basemaps.cartocdn.com/dark_all/$z/$x/$y.png";
+        for (int x = xtile - 2; x <= xtile + 2; x++) {
+          for (int y = ytile - 2; y <= ytile + 2; y++) {
+            String url = "$downloadUrlBase/$z/$x/$y.png";
             await precacheImage(NetworkImage(url, headers: {'User-Agent': 'com.dams.app'}), context);
             
             downloadedTiles++;
@@ -354,7 +358,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Region Downloaded Successfully!"), backgroundColor: Colors.green),
+        const SnackBar(content: Text("Region Saved to Memory!"), backgroundColor: Colors.green),
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -518,12 +522,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
       children: [
         FlutterMap(
           mapController: _mapController,
-          options: MapOptions(initialCenter: LatLng(0, 0), initialZoom: 13),
+          options: MapOptions(
+            initialCenter: LatLng(0, 0), 
+            initialZoom: 13,
+            backgroundColor: const Color(0xFF121212), // FIXED: Dark background while loading
+          ),
           children: [
             TileLayer(
-              urlTemplate: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-              subdomains: const ['a', 'b', 'c', 'd'],
-              userAgentPackageName: 'com.dams.app', // CRITICAL: Identifies the app to the server
+              urlTemplate: mapUrl, // FIXED: Matches the download URL exactly
+              userAgentPackageName: 'com.dams.app',
             ),
             MarkerLayer(
               markers: [
