@@ -208,11 +208,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _getCurrentLocation() async {
-    Position position = await Geolocator.getCurrentPosition();
-    setState(() {
-      _myPos = position;
-      _mapController.move(LatLng(position.latitude, position.longitude), 15);
-    });
+    try {
+      Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+      setState(() {
+        _myPos = position;
+        _mapController.move(LatLng(position.latitude, position.longitude), 15);
+      });
+    } catch (e) {
+      debugPrint("Location Error: $e");
+    }
   }
 
   void _initMesh() async {
@@ -317,7 +321,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     setState(() => liveFeedLogs.insert(0, "SOS Transmitted!"));
   }
 
-  // --- NEW: OFFLINE MAP DOWNLOADER ---
   void _downloadRegion() async {
     if (_myPos == null) return;
     setState(() {
@@ -326,29 +329,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
 
     try {
-      // Zoom levels to download (13: City, 14: Town, 15: Roads, 16: Detailed Buildings)
       List<int> zoomLevels = [13, 14, 15, 16];
-      int totalTiles = 0;
+      int totalTiles = zoomLevels.length * 9;
       int downloadedTiles = 0;
 
-      // Calculate total tiles first
       for (int z in zoomLevels) {
-        totalTiles += 9; // 3x3 grid around center
-      }
-
-      for (int z in zoomLevels) {
-        // Convert Lat/Lng to Tile X/Y
         double latRad = _myPos!.latitude * math.pi / 180;
         int n = math.pow(2, z).toInt();
         int xtile = ((_myPos!.longitude + 180) / 360 * n).floor();
         int ytile = ((1 - math.log(math.tan(latRad) + 1 / math.cos(latRad)) / math.pi) / 2 * n).floor();
 
-        // Download a 3x3 grid around the user
         for (int x = xtile - 1; x <= xtile + 1; x++) {
           for (int y = ytile - 1; y <= ytile + 1; y++) {
-            String url = "https://a.basemaps.cartocdn.com/dark_all/$z/$x/$y.png";
-            // Pre-cache the image into Flutter's internal image cache
-            await precacheImage(NetworkImage(url), context);
+            // Use a more reliable URL for downloading
+            String url = "https://basemaps.cartocdn.com/dark_all/$z/$x/$y.png";
+            await precacheImage(NetworkImage(url, headers: {'User-Agent': 'com.dams.app'}), context);
             
             downloadedTiles++;
             setState(() {
@@ -526,8 +521,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           options: MapOptions(initialCenter: LatLng(0, 0), initialZoom: 13),
           children: [
             TileLayer(
-              urlTemplate: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+              urlTemplate: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
               subdomains: const ['a', 'b', 'c', 'd'],
+              userAgentPackageName: 'com.dams.app', // CRITICAL: Identifies the app to the server
             ),
             MarkerLayer(
               markers: [
@@ -552,7 +548,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ],
         ),
-        // Top Right Navigation Button
         Positioned(
           top: 20,
           right: 20,
@@ -571,7 +566,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ),
               const SizedBox(height: 10),
-              // NEW: DOWNLOAD BUTTON
               GestureDetector(
                 onTap: isDownloadingMap ? null : _downloadRegion,
                 child: Container(
@@ -589,7 +583,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ],
           ),
         ),
-        // Bottom SOS Status Bar
         Positioned(
           bottom: 20,
           left: 20,
